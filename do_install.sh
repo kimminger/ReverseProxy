@@ -1,4 +1,5 @@
 #!/bin/bash
+NGINX_CERT_PATH="/etc/nginx/certs"
 
 apt install dialog
 
@@ -17,11 +18,12 @@ HOSTNAME=""
 DOMAIN=""
 EXCHANGE=""
 OWA=""
+INTERNAL=""
 
 function install_and_cleanup() {
-	apt remove openssh-server task-ssh-server openssh-client telnet usbutils xauth reportbug
+	apt remove task-ssh-server telnet usbutils xauth reportbug
 	apt autoremove
-	apt install nftables nginx-light ufw
+	apt install sudo nginx-light ufw openssh-server openssh-client
 }
 
 function enable_services() {
@@ -34,12 +36,15 @@ function enable_services() {
 fe02::1		ip6-allnodes
 fe02::2		ip6-allrouters
 EOL
-	mkdir /root/certs
 
-	systemctl enable nftables
-	systemctl enable nginx
-	ufw allow 'Nginx HTTPS'
+	ufw allow 'Nginx Full'
+	ufw allow from ${INTERNAL} to any port 22 proto tcp comment 'SSH from internal only'
+	ufw limit 22/tcp
+	ufw enable
+
 	systemctl enable ufw
+	systemctl enable ssh
+	systemctl enable nginx
 }
 
 FIFO=/tmp/`tr -dc A-Za-z0-9 </dev/urandom | head -c 8`
@@ -48,10 +53,11 @@ function read_base_data() {
 		--backtitle "${TITLE//TITLE/Configuration}" \
 		--title "Configuration" \
 		--form "Please enter all values" 20 65 0 \
-		"Hostname  (of the Proxy)" 1 1 "" 1 30 28 0 \
-		"Domain   (External FQDN)" 2 1 "" 2 30 28 0 \
-		"Exchange (Internal FQND)" 3 1 "" 3 30 28 0 \
-		"OWA-Path on the Exchange" 4 1 "" 4 30 28 0 \
+		"Hostname   (of the Proxy)" 1 1 "" 1 30 28 0 \
+		"Internal-Net  (A.B.C.D/M)" 2 1 "" 2 30 28 0 \
+		"Domain    (External FQDN)" 3 1 "" 3 30 28 0 \
+		"Server/IP      (Internal)" 4 1 "" 4 30 28 0 \
+		"Redirect-Path  (URI-Path)" 5 1 "" 5 30 28 0 \
 		--output-fd 1 &>${FIFO}
 	if [ $? == 1 ]; then
 		echo -e "\nAborted...\n\n"
@@ -61,9 +67,10 @@ function read_base_data() {
 	RESULT=(`cat ${FIFO}`)
 	rm ${FIFO}
 	HOSTNAME=${RESULT[0]}
-	DOMAIN=${RESULT[1]}
-	EXCHANGE=${RESULT[2]}
-	OWA=${RESULT[3]}
+	INTERNAL=${RESULT[1]}
+	DOMAIN=${RESULT[2]}
+	EXCHANGE=${RESULT[3]}
+	OWA=${RESULT[4]}
 }
 
 function clean_nginx_installation() {
@@ -127,24 +134,96 @@ net.ipv4.icmp_ignore_bogus_error_messages=1
 net.ipv4.conf.al.log_martians=1
 EOL
 	chmod 0644 /etc/sysctl.d/99-harden.conf
+	systemctl daemon-reload
+
+	cat >/etc/motd <<EOL
+Welcome to the specially hardened Proxy ${HOSTNAME}
+
+Update the SSL-Certificate:
+---------------------------
+1. Upload these files via scp:
+ * ${DOMAIN}.crt
+ * ${DOMAIN}.key
+
+2. Change the ownershp and permission of them:
+\$ sudo chown root.root ${DOMAIN}.*
+\$ sudo chmod 0600 ${DOMAIN}.*
+
+3. Copy them into ${NGINX_CERT_PATH}
+\$ sudo mv ${DOMAIN}.* ${HGINX_CERT_PATH}/
+
+
+Update and/or Upgrade the system:
+---------------------------------
+1. Update the database:
+\$ apt update
+
+2. Upgrade the system and run a system upgrade
+\$ apt upgrade
+\$ apt full-upgrade
+
+3. Finally remove everything what is no more needed:
+\$ apt autoremove
+
+Have fun...
+EOL
+}
+
+function configure_sshd() {
+	sed -i 's/^X11Forwarding.*/X11Forwarding no/' /etc/ssh/sshd_config
+	sed -i 's/^AllowAgentForwarding.*/AllowAgentForwarding no/' /etc/ssh/sshd_config
+	sed -i 's/^AllowTcpForwarding.*/AllowTcpForwarding no/' /etc/ssh/sshd_config
+	sed -i 's/^PrintMotd.*/PrintMotd yes/' /etc/ssh/sshd_config
+
+	cat >/etc/ssh/sshd_config.d/99-z_hardening.conf <<EOL
+# Using https://infosec.mozilla.org/guidelines/openssh with default parameters set too
+Port 22
+Protocol 2
+HostKey /etc/ssh/ssh_host_rsa_key
+HostKey /etc/ssh/ssh_host_ecdsa_key
+HostKey /etc/ssh/ssh_host_ed25519_key
+
+Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr
+MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,umac-128-etm@openssh.com,hmac-sha2-512,hmac-sha2-256
+KexAlgorithms curve25519-sha256@libssh.org,ecdh-sha2-nistp521,ecdh-sha2-nistp384,ecdh-sha2-nistp256,diffie-hellman-group-exchange-sha256
+
+SyslogFacility AUTH
+LogLevel INFO
+Banner none
+
+LoginGraceTime 120
+PermitRootLogin no
+PermitEmptyPasswords no
+PasswordAuthentication yes
+
+PubkeyAuthentication yes
+IgnoreRhosts yes
+
+X11Forwarding no
+PrintMotd no
+PrintLastLog yes
+TCPKeepAlive no
+EOL
+	chmod 0644 /etc/ssh/sshd_config.d/99-z_hardening.conf
 }
 
 function configure_nginx_proxy() {
 	cat >/etc/nginx/sites-available/default <<EOL
 server {
 	listen 80 default_server;
-	listen[::]:80 default_server;
+	listen [::]:80 default_server;
 	server_name ${DOMAIN};
+
 	rewrite ^ https://\$server_name\$request_uri? permanent;
 }
 server {
 	listen 443 ssl default_server;
 	listen [::]:443 ssl default_server;
+	server_name ${DOMAIN};
 
 	gzip off;
-	ssl on;
-	ssl_certificate /root/certs/${DOMAIN}.crt;
-	ssl_certificate_key /root/certs/${DOMAIN}.key;
+	ssl_certificate ${NGINX_CERT_PATH}/${DOMAIN}.crt;
+	ssl_certificate_key ${NGINX_CERT_PATH}/${DOMAIN}.key;
 	ssl_session_timeout 5m;
 
 	location / {
@@ -162,18 +241,50 @@ server {
 	}
 }
 EOL
+	mkdir -p ${NGINX_CERT_PATH}
+	chmod -R 0600 ${NGINX_CERT_PATH}
+}
+
+function __password_change__() {
+	dialog --clear
+	dialog --backtitle "${TITLE//TITLE/Securing Users}" \
+	  --title "New Password for '${1}'?" \
+	  --yes-label "Change Password" \
+	  --yesno "Did you choose a secure Password for '${1}' during the installation or shall we change it?" \
+	  10 50
+	if [ $? == 0 ]; then
+		echo -e "\n\nChange password for: ${1}"
+		passwd ${1}
+	fi
+}
+
+function passwords() {
+	__password_change__ root
+
+	__USERNAME=(`cat /etc/passwd | grep ':1000:' | awk -F':' '{ printf "%s\n%s", $1, $6 }'`)
+	USERNAME="${__USERNAME[0]}"
+	USERHOME="${__USERNAME[1]}"
+	if [ ! -z "${USERNAME}" ]; then
+		__password_change__ ${USERNAME}
+		usermod -a -G sudo ${USERNAME}
+	else
+		echo "Did not find any user with an ID=1000. This is normally the User added during the installation. Please add this user manually and add it to the 'sudo'-group."
+		read __none
+	fi
 }
 
 install_and_cleanup
 read_base_data
 harden_system
+configure_sshd
 clean_nginx_installation
 configure_nginx_proxy
 enable_services
+passwords
 
 dialog --backtitle "${TITLE//TITLE/Finished}" \
   --title "Finished" \
-  --msgbox "The System is configured with your given values and hardened as much as possible.\n\nThere is some basic network blocking and regulation, a firewall blocking all except HTTP and HTTPS and finally an NGINX reverse Proxy redirection from HTTP to HTTPS and only with the most secure TLS-Versions and ciphers enabled.\n\nBe sure there is ${DOMAIN}.key and ${DOMAIN}.crt in place under /root/certs/" \
+  --msgbox "The System is configured with your given values and hardened as much as possible.\n\nThere is some basic network blocking and regulation, a firewall blocking all except HTTP and HTTPS and finally an NGINX reverse Proxy redirection from HTTP to HTTPS and only with the most secure TLS-Versions and ciphers enabled.\n\nBe sure there is ${DOMAIN}.key and ${DOMAIN}.crt in place under ${NGINX_CERT_PATH}" \
   18 50
 
 clear
