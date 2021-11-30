@@ -15,10 +15,12 @@ if [ $? == 1 ]; then
 fi
 
 HOSTNAME=""
+INTERNAL=""
 DOMAIN=""
 EXCHANGE=""
 OWA=""
-INTERNAL=""
+SYSLOG=""
+SYSPORT=""
 
 function install_and_cleanup() {
 	apt remove task-ssh-server telnet usbutils xauth reportbug
@@ -36,6 +38,17 @@ function enable_services() {
 fe02::1		ip6-allnodes
 fe02::2		ip6-allrouters
 EOL
+
+	cat >/etc/cron.d/upgrade <<EOL
+# Hold the system up to date around 2:00 AM
+2 0 * * 0 root ( apt-get -y update && apt-get -y -d upgrade ) > /dev/null
+EOL
+
+	if [ ! -z "${SYSLOG}" ]; then
+		echo -e "\n# Remote syslog server\n*.* @@${SYSLOG}:${SYSPORT:-514}" >> /etc/rsyslog.conf
+	else
+		echo -e "\n# Remote syslog server\n#*.* @@1.2.3.4:514" >> /etc/rsyslog.conf
+	fi
 
 	ufw allow 'Nginx Full'
 	ufw allow from ${INTERNAL} to any port 22 proto tcp comment 'SSH from internal only'
@@ -58,6 +71,8 @@ function read_base_data() {
 		"Domain    (External FQDN)" 3 1 "" 3 30 28 0 \
 		"Server/IP      (Internal)" 4 1 "" 4 30 28 0 \
 		"Redirect-Path  (URI-Path)" 5 1 "" 5 30 28 0 \
+		"Syslog-Server   (Host/IP)" 6 1 "" 6 30 28 0 \
+		"Syslog-Port (default 514)" 7 1 "" 7 30 28 0 \
 		--output-fd 1 &>${FIFO}
 	if [ $? == 1 ]; then
 		echo -e "\nAborted...\n\n"
@@ -71,6 +86,8 @@ function read_base_data() {
 	DOMAIN=${RESULT[2]}
 	EXCHANGE=${RESULT[3]}
 	OWA=${RESULT[4]}
+	SYSLOG=${RESULT[5]}
+	SYSPORT=${RESULT[6]}
 }
 
 function clean_nginx_installation() {
@@ -153,16 +170,11 @@ Update the SSL-Certificate:
 \$ sudo mv ${DOMAIN}.* ${HGINX_CERT_PATH}/
 
 
-Update and/or Upgrade the system:
----------------------------------
-1. Update the database:
+Upgrade the system from time to time:
+-------------------------------------
 \$ apt update
-
-2. Upgrade the system and run a system upgrade
 \$ apt upgrade
 \$ apt full-upgrade
-
-3. Finally remove everything what is no more needed:
 \$ apt autoremove
 
 Have fun...
