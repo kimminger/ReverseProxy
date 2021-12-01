@@ -119,13 +119,12 @@ function read_base_data() {
 		--backtitle "${TITLE//TITLE/Configuration}" \
 		--title "Configuration" \
 		--form "Please enter all values" 20 65 0 \
-		"Hostname   (of the Proxy)" 1 1 "" 1 30 28 0 \
-		"Internal-Net  (A.B.C.D/M)" 2 1 "" 2 30 28 0 \
-		"Domain    (External FQDN)" 3 1 "" 3 30 28 0 \
-		"Server/IP      (Internal)" 4 1 "" 4 30 28 0 \
-		"Redirect-Path  (URI-Path)" 5 1 "" 5 30 28 0 \
-		"Syslog-Server   (Host/IP)" 6 1 "" 6 30 28 0 \
-		"Syslog-Port (default 514)" 7 1 "" 7 30 28 0 \
+		"Hostname    (of the Proxy)" 1 1 "" 1 30 28 0 \
+		"Allow SSH from (A.B.C.D/M)" 2 1 "" 2 30 28 0 \
+		"Domain     (External FQDN)" 3 1 "" 3 30 28 0 \
+		"Exchange-Server (Internal)" 4 1 "" 4 30 28 0 \
+		"Syslog-Server    (Host/IP)" 5 1 "" 5 30 28 0 \
+		"Syslog-Port  (default 514)" 6 1 "" 6 30 28 0 \
 		--output-fd 1 &>${FIFO}
 	if [ $? == 1 ]; then
 		echo -e "\nAborted...\n\n"
@@ -138,9 +137,8 @@ function read_base_data() {
 	INTERNAL=${RESULT[1]}
 	DOMAIN=${RESULT[2]}
 	EXCHANGE=${RESULT[3]}
-	OWA=${RESULT[4]}
-	SYSLOG=${RESULT[5]}
-	SYSPORT=${RESULT[6]}
+	SYSLOG=${RESULT[4]}
+	SYSPORT=${RESULT[5]}
 }
 
 function clean_nginx_installation() {
@@ -291,18 +289,29 @@ server {
 	ssl_certificate_key ${NGINX_CERT_PATH}/${DOMAIN}.key;
 	ssl_session_timeout 5m;
 
-	location / {
-		proxy_http_version 1.1;
-		proxy_read_timeout 360;
-		proxy_cache_bypass \$http_upgrade;
-		proxy_set_header Upgrade \$http_upgrade;
-		proxy_set_header Connection keep-alive;
-		proxy_set_header Host \$host;
-		proxy_set_header X-Real-IP \$remote_addr;
-		proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-		proxy_set_header X-Forwarded-Proto \$scheme;
+	proxy_http_version 1.1;
+	proxy_read_timeout 360;
 
-		proxy_pass https://${EXCHANGE}/${OWA};
+	proxy_cache_bypass \$http_upgrade;
+
+	proxy_set_header Upgrade \$http_upgrade;
+	proxy_set_header Connection keep-alive;
+	proxy_set_header Host \$host;
+	proxy_set_header X-Real-IP \$remote_addr;
+	proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+	proxy_set_header X-Forwarded-Proto \$scheme;
+
+	location / {
+		rewrite ^ https://\$server_name\owa permanent;
+	}
+	location /owa {
+		proxy_pass https://${EXCHANGE}/owa;
+	}
+	location /ews {
+		proxy_pass https://${EXCHANGE}/ews;
+	}
+	location /Microsoft-Server-ActiveSync {
+		proxy_pass https://${EXCHANGE}/Microsoft-Server-ActiveSync;
 	}
 }
 EOL
