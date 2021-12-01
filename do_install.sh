@@ -1,4 +1,57 @@
 #!/bin/bash
+
+clear
+
+# As fist the network so we can continue
+echo -e "\n\nBasic Network Configuration:"
+
+echo -n "  DHCP [Y/n]"
+read DHCP
+if [ "${DHCP}" == "n" -o "${DHCP}" == "N" ]; then
+	IPv4=''
+	while [ -z "${IPv4}" ]; do
+		echo -n "  IPv4 Address: "
+		read IPv4
+	done
+
+	echo -n "  Netmask (DDN not /CIDR) [255.255.255.0]: "
+	read NMASK
+	if [ -z "${NMASK}" ]; then
+		NMASK="255.255.255.0"
+	fi
+
+	IPGW=''
+	while [ -z "${IPGW}" ]; do
+		echo -n "  IPv4 Gateway: "
+		read IPGW
+	done
+
+	DNS1=''
+	while [ -z "${DNS1}" ]; do
+		echo -n "  DNS-Server 1: "
+		read DNS1
+	done
+	echo -n "  DNS-Server 2 (optional): "
+	read DNS2
+
+	sed -i 's/inet dhcp/inet static/' /etc/network/interfaces
+	echo -e "\taddress ${IPv4}" >> /etc/network/interfaces
+	echo -e "\tnetmast ${NMASK}" >> /etc/network/interfaces
+	echo -e "\tgateway ${IPGW}" >> /etc/network/interfaces
+
+	echo "nameserver ${DNS1}" > /etc/resolv.conf
+	if [ ! -z "${DNS2}" ]; then
+		echo "nameserver ${DNS2}" >> /etc/resolv.conf
+	fi
+
+	systemctl enable networking
+	systemctl restart networking
+
+	IPIFACE=`cat /etc/network/interfaces | grep "inet static" | awk '{print $2}'`
+	ifup ${IPIFACE}
+fi
+
+# The main part starts here...
 NGINX_CERT_PATH="/etc/nginx/certs"
 
 apt install dialog
