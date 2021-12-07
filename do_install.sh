@@ -212,10 +212,12 @@ Update the SSL-Certificate:
 1. Upload these files via scp:
  * ${DOMAIN}.crt
  * ${DOMAIN}.key
+\# pscp ${DOMAIN}.* reverse@A.B.C.D:/home/reverse/
 
 2. Change the ownershp and permission of them:
+\$ cd /home/reverse
+\$ chmod 0600 ${DOMAIN}.*
 \$ sudo chown root.root ${DOMAIN}.*
-\$ sudo chmod 0600 ${DOMAIN}.*
 
 3. Copy them into ${NGINX_CERT_PATH}
 \$ sudo mv ${DOMAIN}.* ${HGINX_CERT_PATH}/
