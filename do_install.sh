@@ -5,7 +5,7 @@ clear
 # As fist the network so we can continue
 echo -e "\n\nBasic Network Configuration:"
 
-echo -n "  DHCP [Y/n]"
+echo -n "  DHCP (or no change) [Y/n]"
 read DHCP
 if [ "${DHCP}" == "n" -o "${DHCP}" == "N" ]; then
 	IPv4=''
@@ -163,21 +163,14 @@ function clean_nginx_installation() {
 client_body_buffer_size 1k;
 client_header_buffer_size 1k;
 client_max_body_size 1k;
-large_client_header_buffers 2 1k;
+large_client_header_buffers 4 16k;
 EOL
 	chmod 0644 /etc/nginx/conf.d/99-buffer-policy.conf
 	cat >/etc/nginx/conf.d/99-xss.conf <<EOL
-add_header X-XSS-Protection "1; mode=block";
-add_header X-Frame-Options "SAMEORIGIN";
-add_header Strict-Transport-Security "max-age=31536000; includeSubdomains; preload";
-add_header Content-Security-Policy "default-src 'self' http: https: data: blob: 'unsafe-inline'" always;
-if (\$http_user_agent ~* LWP::Simple|BBBike|wget|curl) {
-  return 403;
-}
-
-location / {
-  limit_except GET HEAD POST { deny all; }
-}
+#add_header X-XSS-Protection "1; mode=block";
+#add_header X-Frame-Options "SAMEORIGIN";
+#add_header Strict-Transport-Security "max-age=31536000; includeSubdomains; preload";
+#add_header Content-Security-Policy "default-src 'self' http: https: data: blob: 'unsafe-inline'" always;
 EOL
 	chmod 0644 /etc/nginx/conf.d/99-xss.conf
 }
@@ -210,9 +203,9 @@ Welcome to the specially hardened Proxy ${HOSTNAME}
 Update the SSL-Certificate:
 ---------------------------
 1. Upload these files via scp:
- * ${DOMAIN}.crt
+ * ${DOMAIN}.pem
  * ${DOMAIN}.key
-\# pscp ${DOMAIN}.* reverse@A.B.C.D:/home/reverse/
+# pscp ${DOMAIN}.* reverse@A.B.C.D:/home/reverse/
 
 2. Change the ownershp and permission of them:
 \$ cd /home/reverse
@@ -287,7 +280,7 @@ server {
 	server_name ${DOMAIN};
 
 	gzip off;
-	ssl_certificate ${NGINX_CERT_PATH}/${DOMAIN}.crt;
+	ssl_certificate ${NGINX_CERT_PATH}/${DOMAIN}.pem;
 	ssl_certificate_key ${NGINX_CERT_PATH}/${DOMAIN}.key;
 	ssl_session_timeout 5m;
 
