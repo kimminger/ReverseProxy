@@ -162,7 +162,7 @@ function clean_nginx_installation() {
 	cat >/etc/nginx/conf.d/99-buffer-policy.conf <<EOL
 client_body_buffer_size 1k;
 client_header_buffer_size 1k;
-client_max_body_size 1k;
+client_max_body_size 0;
 large_client_header_buffers 4 16k;
 EOL
 	chmod 0644 /etc/nginx/conf.d/99-buffer-policy.conf
@@ -207,16 +207,12 @@ Update the SSL-Certificate:
  * ${DOMAIN}.key
 # pscp ${DOMAIN}.* reverse@A.B.C.D:/home/reverse/
 
-2. Change the ownershp and permission of them:
+2. Install as user reverse:
 \$ cd /home/reverse
-\$ chmod 0600 ${DOMAIN}.*
-\$ sudo chown root.root ${DOMAIN}.*
-
-3. Copy them into ${NGINX_CERT_PATH}
-\$ sudo mv ${DOMAIN}.* ${HGINX_CERT_PATH}/
+\$ ./install_cert.sh
 
 
-Upgrade the system from time to time:
+Upgrade the system manually from time to time:
 -------------------------------------
 \$ apt update
 \$ apt upgrade
@@ -224,6 +220,27 @@ Upgrade the system from time to time:
 \$ apt autoremove
 
 Have fun...
+EOL
+}
+
+function prepare_cert_copy() {
+	cat >/home/reverse/install_cert.sh <<EOL
+#!/bin/bash
+PEM=`ls -a *.pem | head -1`
+KEY=`ls -a *.key | head -1`
+
+echo "Found the following:"
+echo "     pem: \${PEM}"
+echo "     key: \${KEY}"
+echo "If these are not the correct files, press CTRL+c and remove all pem and key files which are irrelevant."
+read _TMP
+
+mv \${PEM} ${DOMAIN}.pem
+mv \${KEY} ${DOMAIN}.key
+chmod 0600 ${DOMAIN}.*
+sudo chown root.root ${DOMAIN}.*
+sudo mv ${DOMAIN}.* ${HGINX_CERT_PATH}/
+sudo systemctl restart nginx
 EOL
 }
 
@@ -296,18 +313,16 @@ server {
 	proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
 	proxy_set_header X-Forwarded-Proto \$scheme;
 
-	location / {
-		rewrite ^ https://\$server_name\owa permanent;
-	}
-	location /owa {
-		proxy_pass https://${EXCHANGE}/owa;
-	}
-	location /ews {
-		proxy_pass https://${EXCHANGE}/ews;
-	}
-	location /Microsoft-Server-ActiveSync {
-		proxy_pass https://${EXCHANGE}/Microsoft-Server-ActiveSync;
-	}
+	location / { rewrite ^ https://\$server_name\owa permanent; }
+
+	location /owa { proxy_pass https://${EXCHANGE}/owa; }
+	location /ews { proxy_pass https://${EXCHANGE}/ews; }
+	location /EWS { proxy_pass https://${EXCHANGE}/EWS; }
+	location /mapi { proxy_pass https://${EXCHANGE}/mapi; }
+	location /autodiscover { proxy_pass https://${EXCHANGE}/autodiscover; }
+	location /Autodiscover { proxy_pass https://${EXCHANGE}/Autodiscover; }
+	location /Microsoft-Server-ActiveSync { proxy_pass https://${EXCHANGE}/Microsoft-Server-ActiveSync; }
+	location /rpc/rpcproxy.dll { proxy_pass https://${EXCHANGE}/rpc/rpcproxy.dll; }
 }
 EOL
 	mkdir -p ${NGINX_CERT_PATH}
@@ -348,6 +363,7 @@ harden_system
 configure_sshd
 clean_nginx_installation
 configure_nginx_proxy
+prepare_cert_copy
 enable_services
 passwords
 
