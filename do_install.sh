@@ -78,7 +78,7 @@ SYSPORT=""
 function install_and_cleanup() {
 	apt remove task-ssh-server telnet usbutils xauth reportbug
 	apt autoremove
-	apt install sudo nginx-light ufw openssh-server openssh-client
+	apt install sudo nginx-light libnginx-mod-http-headers-more-filter ufw openssh-server openssh-client
 }
 
 function enable_services() {
