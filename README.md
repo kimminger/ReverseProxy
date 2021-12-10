@@ -2,7 +2,7 @@
 
 Easily harden a debian minimalistic installation and configure a nginx to redirect all traffic to an internal webserver.
 
-* Download (64-bit PC netinst iso)[https://www.debian.org/distrib/]
+* Download [64-bit PC netinst iso](https://www.debian.org/distrib/)
 * Install in a new VM _(**Do not install anything**, just the base system, no X-Server, no SSH-Server. Uncheck everything except the base system and tools.)_
 * Copy the script do_install.sh to /root/
 * Run the script
