@@ -305,8 +305,11 @@ server {
 	proxy_read_timeout 360;
 
 	proxy_cache_bypass \$http_upgrade;
-
 	proxy_set_header Upgrade \$http_upgrade;
+
+	more_set_input_headers "Authorization: $http_authorization";
+	more_set_headers -s 401 'WWW-Authenticate: Basic realm="${DOMAIN}"';
+
 	proxy_set_header Connection keep-alive;
 	proxy_set_header Host \$host;
 	proxy_set_header X-Real-IP \$remote_addr;
@@ -316,9 +319,11 @@ server {
 	location / { rewrite ^ https://\$server_name\owa permanent; }
 
 	location /owa { proxy_pass https://${EXCHANGE}/owa; }
-	location /ews { proxy_pass https://${EXCHANGE}/ews; }
+	location /OWA { proxy_pass https://${EXCHANGE}/owa; }
+	location /ews { proxy_pass https://${EXCHANGE}/EWS; }
 	location /EWS { proxy_pass https://${EXCHANGE}/EWS; }
 	location /mapi { proxy_pass https://${EXCHANGE}/mapi; }
+	location /MAPI { proxy_pass https://${EXCHANGE}/mapi; }
 	location /autodiscover { proxy_pass https://${EXCHANGE}/autodiscover; }
 	location /Autodiscover { proxy_pass https://${EXCHANGE}/Autodiscover; }
 	location /Microsoft-Server-ActiveSync { proxy_pass https://${EXCHANGE}/Microsoft-Server-ActiveSync; }
