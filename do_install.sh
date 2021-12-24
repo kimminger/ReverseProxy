@@ -92,11 +92,13 @@ fe02::1		ip6-allnodes
 fe02::2		ip6-allrouters
 EOL
 
-	cat >/etc/cron.d/upgrade <<EOL
-# Hold the system up to date around 2:00 AM
-2 0 * * 0 root ( apt-get -y update && apt-get -y -d upgrade ) > /dev/null
+	cat >/etc/cron.daily/upgrade <<EOL
+#!/bin/bash
+# Hold the system up to date
+apt-get -y update > /dev/null
+apt-get -y -d upgrade > /dev/null
 EOL
-
+	chmod 0755 /etc/cron.daily/upgrade
 	if [ ! -z "${SYSLOG}" ]; then
 		echo -e "\n# Remote syslog server\n*.* @@${SYSLOG}:${SYSPORT:-514}" >> /etc/rsyslog.conf
 	else
