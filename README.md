@@ -3,10 +3,13 @@
 Easily harden a debian minimalistic installation and configure a nginx to redirect all traffic to an internal webserver.
 
 * Download [64-bit PC netinst iso](https://www.debian.org/distrib/)
-* Install in a new VM _(**Do not install anything**, just the base system, no X-Server, no SSH-Server. Uncheck everything except the base system and tools.)_
+* Install in a new VM _(**Do not install anything**, just the base system with an SSH-Server but NO X-Server and stuff like that. Uncheck everything except the base system, tools, ssh server.)_
 * Copy the script do_install.sh to /root/
 * Run the script
 * Restart the VM
+* Copy the *.pfx for the domain to /home/reverse and run _install_cert.sh_ to install the certificates
+
+_(Use winSCP or similar to upload files.)_
 
 For this to work with Exchange, you have to enable **Basic-Authentication** on all the Exchange URL's.
 In particular for OWA, EWS, MAPI and Autodiscover. In this setup we support OutlookWebAccess (OWA) but also Teams in Office365 and Outlook-Clients and ActiveSync clients as well. If you not need one of them, you should disable them in the nginx proxy configuration.
@@ -25,10 +28,20 @@ The nginx configuration is changed and extended to be as save as possible. There
 
 The main traffic on HTTP is redirected to HTTPS and only the most recommended ciphers are allowed.
 
+### Certificates
+
+The nginx proxy needs the key and certificate for SSL-Connections:
+
+```
+  openssl pkcs12 -in domain.pfx -nokeys -out domain.pfx.pem
+  openssl pkcs12 -in domain.pfx -nocerts -out domain.pfx.key -nodes
+```
+
 ### Most important settings
 
 Generally we turn off the server tokens and gzip (due to SSL) and disable all insecure SSL-Protocols.
 For Exchange we have to allow unlimitted client body size (this is unsecure but needed) `[client_max_body_size 0]` and also we have to allow big header values `[large_client_header_buffers 4 32k]`.
+
 ```
 server_tokens off;
 gzip off;

@@ -60,7 +60,7 @@ TITLE="ReverseProxy Setup: TITLE"
 
 dialog --backtitle "${TITLE//TITLE/Warmup}" \
   --title "Starting setup" \
-  --yesno "This Script is installing and hardening a NGINX Reverse-Proxy.\nTo do so, the base linux is cleand up and hardnend as well.\n\nShall we continue?" \
+  --yesno "This Script is installing and hardening a NGINX Reverse-Proxy.\nTo do so, the base linux is cleaned up and hardnend as well.\n\nShall we continue?" \
   10 50
 if [ $? == 1 ]; then
 	echo -e "\nNothing done except installed dialog...\n\nsee you soon...\n"
@@ -77,8 +77,9 @@ SYSPORT=""
 
 function install_and_cleanup() {
 	apt remove task-ssh-server telnet usbutils xauth reportbug
+	apt install sudo nginx-light libnginx-mod-http-headers-more-filter ufw openssh-server openssh-client wget
 	apt autoremove
-	apt install sudo nginx-light libnginx-mod-http-headers-more-filter ufw openssh-server openssh-client
+	/sbin/usermod -a -G sudo reverse
 }
 
 function enable_services() {
@@ -205,8 +206,8 @@ Welcome to the specially hardened Proxy ${HOSTNAME}
 Update the SSL-Certificate:
 ---------------------------
 1. Upload these files via scp:
- * ${DOMAIN}.pem
- * ${DOMAIN}.key
+ * ${DOMAIN}.pfx
+ * (or alternatively ${DOMAIN}.pem and ${DOMAIN}.key)
 # pscp ${DOMAIN}.* reverse@A.B.C.D:/home/reverse/
 
 2. Install as user reverse:
@@ -228,22 +229,37 @@ EOL
 function prepare_cert_copy() {
 	cat >/home/reverse/install_cert.sh <<EOL
 #!/bin/bash
-PEM=`ls -a *.pem | head -1`
-KEY=`ls -a *.key | head -1`
+DOMAIN="${DOMAIN}"
+
+PFX=\`ls -a *.pfx | head -1\`
+if [ ! -z "\${PFX}" ]; then
+  echo "Found the following:"
+  echo "     pfx: \${PFX}"
+  echo "If this in not the correct one, press ctrl+c and upload the correct one."
+  read _TMP
+
+  openssl pkcs12 -in \${PFX} -nokeys -out \${DOMAIN}.pem
+  openssl pkcs12 -in \${PFX} -nocerts -out \${DOMAIN}.key -nodes
+fi
+
+PEM=\`ls -a *.pem | head -1\`
+KEY=\`ls -a *.key | head -1\`
 
 echo "Found the following:"
 echo "     pem: \${PEM}"
 echo "     key: \${KEY}"
-echo "If these are not the correct files, press CTRL+c and remove all pem and key files which are irrelevant."
+echo "If these are NOT the correct files, press CTRL+c and remove all pem and key files which are irrelevant."
 read _TMP
 
-mv \${PEM} ${DOMAIN}.pem
-mv \${KEY} ${DOMAIN}.key
-chmod 0600 ${DOMAIN}.*
-sudo chown root.root ${DOMAIN}.*
-sudo mv ${DOMAIN}.* ${HGINX_CERT_PATH}/
+mv \${PEM} \${DOMAIN}.pem
+mv \${KEY} \${DOMAIN}.key
+chmod 0600 \${DOMAIN}.*
+sudo chown root.root \${DOMAIN}.*
+sudo mv \${DOMAIN}.* ${NGINX_CERT_PATH}/
 sudo systemctl restart nginx
 EOL
+	chown reverse /home/reverse/install_cert.sh
+	chmod 0700 /home/reverse/install_cert.sh
 }
 
 function configure_sshd() {
@@ -289,14 +305,14 @@ function configure_nginx_proxy() {
 server {
 	listen 80 default_server;
 	listen [::]:80 default_server;
-	server_name ${DOMAIN};
+	#server_name ${DOMAIN};
 
-	rewrite ^ https://\$server_name\$request_uri? permanent;
+	rewrite ^ https://${DOMAIN}\$request_uri? permanent;
 }
 server {
 	listen 443 ssl default_server;
 	listen [::]:443 ssl default_server;
-	server_name ${DOMAIN};
+	#server_name ${DOMAIN};
 
 	gzip off;
 	ssl_certificate ${NGINX_CERT_PATH}/${DOMAIN}.pem;
@@ -309,8 +325,8 @@ server {
 	proxy_cache_bypass \$http_upgrade;
 	proxy_set_header Upgrade \$http_upgrade;
 
-	more_set_input_headers "Authorization: $http_authorization";
-	more_set_headers -s 401 'WWW-Authenticate: Basic realm="${DOMAIN}"';
+	more_set_input_headers "Authorization: \$http_authorization";
+	more_set_headers -s 401 'WWW-Authenticate: Basic realm="\$host"';
 
 	proxy_set_header Connection keep-alive;
 	proxy_set_header Host \$host;
@@ -318,7 +334,7 @@ server {
 	proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
 	proxy_set_header X-Forwarded-Proto \$scheme;
 
-	location / { rewrite ^ https://\$server_name\owa permanent; }
+	location / { rewrite ^ https://\$server_name/owa permanent; }
 
 	location /owa { proxy_pass https://${EXCHANGE}/owa; }
 	location /OWA { proxy_pass https://${EXCHANGE}/owa; }
@@ -332,6 +348,10 @@ server {
 	location /rpc/rpcproxy.dll { proxy_pass https://${EXCHANGE}/rpc/rpcproxy.dll; }
 }
 EOL
+
+	rm /etc/nginx/modules-enabled/*
+	ln -s /usr/share/nginx/modules-available/mod-http-headers-more-filter.conf /etc/nginx/modules-enabled/50-mod-http-headers-more-filter.conf
+
 	mkdir -p ${NGINX_CERT_PATH}
 	chmod -R 0600 ${NGINX_CERT_PATH}
 }
