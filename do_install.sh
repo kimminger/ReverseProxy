@@ -334,7 +334,7 @@ server {
 	proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
 	proxy_set_header X-Forwarded-Proto \$scheme;
 
-	location / { rewrite ^ https://\$server_name/owa permanent; }
+	location / { rewrite ^ https://\$host/owa permanent; }
 
 	location /owa { proxy_pass https://${EXCHANGE}/owa; }
 	location /OWA { proxy_pass https://${EXCHANGE}/owa; }
