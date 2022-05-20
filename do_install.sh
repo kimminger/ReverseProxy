@@ -75,11 +75,18 @@ OWA=""
 SYSLOG=""
 SYSPORT=""
 
+USER1000=(`cat /etc/passwd | grep ':1000:' | awk -F':' '{ printf "%s\n%s", $1 }'`)
+if [ -z "${USER1000}" ]; then
+	echo "There should be a user with UID 1000 being created during setup."
+	echo "Please create a user with UID 1000 and restart this script."
+	exit 1
+fi
+
 function install_and_cleanup() {
 	apt remove task-ssh-server telnet usbutils xauth reportbug
 	apt install sudo nginx-light libnginx-mod-http-headers-more-filter ufw openssh-server openssh-client wget
 	apt autoremove
-	/sbin/usermod -a -G sudo reverse
+	/sbin/usermod -a -G sudo ${USER1000}
 }
 
 function enable_services() {
@@ -208,10 +215,10 @@ Update the SSL-Certificate:
 1. Upload these files via scp:
  * ${DOMAIN}.pfx
  * (or alternatively ${DOMAIN}.pem and ${DOMAIN}.key)
-# pscp ${DOMAIN}.* reverse@A.B.C.D:/home/reverse/
+# pscp ${DOMAIN}.* reverse@A.B.C.D:/home/${USER1000}/
 
 2. Install as user reverse:
-\$ cd /home/reverse
+\$ cd /home/${USER1000}
 \$ ./install_cert.sh
 
 
@@ -227,7 +234,7 @@ EOL
 }
 
 function prepare_cert_copy() {
-	cat >/home/reverse/install_cert.sh <<EOL
+	cat >/home/${USER1000}/install_cert.sh <<EOL
 #!/bin/bash
 DOMAIN="${DOMAIN}"
 
@@ -239,7 +246,9 @@ if [ ! -z "\${PFX}" ]; then
   read _TMP
 
   openssl pkcs12 -in \${PFX} -nokeys -out \${DOMAIN}.pem
+  if [ "$?" != "0" ]; then exit 1; fi
   openssl pkcs12 -in \${PFX} -nocerts -out \${DOMAIN}.key -nodes
+  if [ "$?" != "0" ]; then exit 1; fi
 fi
 
 PEM=\`ls -a *.pem | head -1\`
@@ -251,15 +260,13 @@ echo "     key: \${KEY}"
 echo "If these are NOT the correct files, press CTRL+c and remove all pem and key files which are irrelevant."
 read _TMP
 
-mv \${PEM} \${DOMAIN}.pem
-mv \${KEY} \${DOMAIN}.key
 chmod 0600 \${DOMAIN}.*
 sudo chown root.root \${DOMAIN}.*
 sudo mv \${DOMAIN}.* ${NGINX_CERT_PATH}/
 sudo systemctl restart nginx
 EOL
-	chown reverse /home/reverse/install_cert.sh
-	chmod 0700 /home/reverse/install_cert.sh
+	chown reverse /home/${USER1000}/install_cert.sh
+	chmod 0700 /home/${USER1000}/install_cert.sh
 }
 
 function configure_sshd() {
