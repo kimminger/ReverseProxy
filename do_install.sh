@@ -94,8 +94,10 @@ function enable_services() {
 	cat >/etc/hosts <<EOL
 127.0.0.1	localhost
 127.0.0.1	${HOSTNAME}
+127.0.0.1	${DOMAIN}
 ::1		localhost  ip6-localhost  ip6-loopback
 ::1		${HOSTNAME}
+::1		${DOMAIN}
 fe02::1		ip6-allnodes
 fe02::2		ip6-allrouters
 EOL
