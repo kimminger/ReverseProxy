@@ -316,7 +316,8 @@ server {
 	listen [::]:80 default_server;
 	#server_name ${DOMAIN};
 
-	rewrite ^ https://${DOMAIN}\$request_uri? permanent;
+        location = /+ { rewrite ^ https://\$server_name\$request_uri? permanent; }
+        location /nginx_status { stub_status; allow 127.0.0.1; deny all; }
 }
 server {
 	listen 443 ssl default_server;
@@ -356,7 +357,6 @@ server {
 	location /Microsoft-Server-ActiveSync { proxy_pass https://${EXCHANGE}/Microsoft-Server-ActiveSync; }
 	location /rpc/rpcproxy.dll { proxy_pass https://${EXCHANGE}/rpc/rpcproxy.dll; }
         location /duo { proxy_pass https://${EXCHANGE}/duo; }
-        location /nginx_status { stub_status; allow 127.0.0.1; deny all; }
 }
 EOL
 
