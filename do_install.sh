@@ -346,16 +346,30 @@ server {
 
 	location / { rewrite ^ https://\$host/owa permanent; }
 
+        # CVE-2022-41040, CVE-2022-41082
+        location ~* autodiscover.*powershell { return 403; }
+
+	# Outlook Webaccess
 	location /owa { proxy_pass https://${EXCHANGE}/owa; }
 	location /OWA { proxy_pass https://${EXCHANGE}/owa; }
+
+	# ExchangeWebServices for Office-365 Hybrid integrations
 	location /ews { proxy_pass https://${EXCHANGE}/EWS; }
 	location /EWS { proxy_pass https://${EXCHANGE}/EWS; }
+
+	# MAPI for Outlook sync and Mobile-Apps
 	location /mapi { proxy_pass https://${EXCHANGE}/mapi; }
 	location /MAPI { proxy_pass https://${EXCHANGE}/mapi; }
+
+	# Autodiscover configuration
 	location /autodiscover { proxy_pass https://${EXCHANGE}/autodiscover; }
 	location /Autodiscover { proxy_pass https://${EXCHANGE}/Autodiscover; }
+
+	# ActiveSync for some Mobile-Apps
 	location /Microsoft-Server-ActiveSync { proxy_pass https://${EXCHANGE}/Microsoft-Server-ActiveSync; }
 	location /rpc/rpcproxy.dll { proxy_pass https://${EXCHANGE}/rpc/rpcproxy.dll; }
+
+	# 2FA from DUO or any other
         location /duo { proxy_pass https://${EXCHANGE}/duo; }
 }
 EOL

@@ -28,6 +28,10 @@ The nginx configuration is changed and extended to be as save as possible. There
 
 The main traffic on HTTP is redirected to HTTPS and only the most recommended ciphers are allowed.
 
+### Update 2022-10-08
+
+Blocking all requests which are known from CVE-2022-41040, CVE-2022-41082: ^.*autodiscover.*powershell.*$
+
 ### Certificates
 
 The nginx proxy needs the key and certificate for SSL-Connections:
@@ -96,7 +100,10 @@ server {
 
 	location / { rewrite ^ https://$server_name/owa permanent; }
 
-	# Outloo WebAccess
+	# CVE-2022-41040, CVE-2022-41082
+	location ~* autodiscover.*powershell { return 403; }
+
+	# Outlook WebAccess
 	location /owa { proxy_pass https://INT.EXCH.IP.ADDR/owa; }
 	location /OWA { proxy_pass https://INT.EXCH.IP.ADDR/owa; }
 
