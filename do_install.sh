@@ -347,7 +347,7 @@ server {
 	location / { rewrite ^ https://\$host/owa permanent; }
 
         # CVE-2022-41040, CVE-2022-41082
-        location ~* autodiscover.*powershell { return 403; }
+        location ~* autodiscover.*wershell { return 403; }
 
 	# Outlook Webaccess
 	location /owa { proxy_pass https://${EXCHANGE}/owa; }
