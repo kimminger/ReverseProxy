@@ -314,7 +314,7 @@ function configure_nginx_proxy() {
 server {
 	listen 80 default_server;
 	listen [::]:80 default_server;
-	#server_name ${DOMAIN};
+	server_name ${DOMAIN};
 
         location = /+ { rewrite ^ https://\$server_name\$request_uri? permanent; }
         location /nginx_status { stub_status; allow 127.0.0.1; deny all; }
@@ -322,7 +322,7 @@ server {
 server {
 	listen 443 ssl default_server;
 	listen [::]:443 ssl default_server;
-	#server_name ${DOMAIN};
+	server_name ${DOMAIN};
 
 	gzip off;
 	ssl_certificate ${NGINX_CERT_PATH}/${DOMAIN}.pem;
@@ -347,7 +347,7 @@ server {
 	location / { rewrite ^ https://\$host/owa permanent; }
 
         # CVE-2022-41040, CVE-2022-41082
-        location ~* autodiscover.*wershell { return 403; }
+        location ~* powershell { return 403; }
 
 	# Outlook Webaccess
 	location /owa { proxy_pass https://${EXCHANGE}/owa; }
