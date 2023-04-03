@@ -83,7 +83,7 @@ if [ -z "${USER1000}" ]; then
 fi
 
 function install_and_cleanup() {
-	apt remove task-ssh-server telnet usbutils xauth reportbug
+	apt remove task-ssh-server telnet usbutils xauth reportbug unattended-upgrades
 	apt install sudo nginx-light libnginx-mod-http-headers-more-filter ufw openssh-server openssh-client wget
 	apt autoremove
 	/sbin/usermod -a -G sudo ${USER1000}
@@ -102,13 +102,17 @@ fe02::1		ip6-allnodes
 fe02::2		ip6-allrouters
 EOL
 
-	cat >/etc/cron.daily/upgrade <<EOL
-#!/bin/bash
-# Hold the system up to date
-apt-get -y update > /dev/null
-apt-get -y -d upgrade > /dev/null
+	sed -i 's/^\/\/\(.*}-updates";\)$/\1/' /etc/apt/apt.conf.d/50unattended-upgrades
+	sed -i 's/^\/\/\(.*}-proposed-updates";\)$/\1/' /etc/apt/apt.conf.d/50unattended-upgrades
+	sed -i 's/^\/\/\(Unattended-Upgrade::Remove-Unused-Dependencies\).*"false";$/\1 "true";/' /etc/apt/apt.conf.d/50unattended-upgrades
+	
+	cat >/etc/apt/apt.conf.d/20auto-upgrades <<EOL
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
 EOL
-	chmod 0755 /etc/cron.daily/upgrade
+	systemctl enable unattended-upgrades.service
+	systemctl start unattended-upgrades.service
+	
 	if [ ! -z "${SYSLOG}" ]; then
 		echo -e "\n# Remote syslog server\n*.* @@${SYSLOG}:${SYSPORT:-514}" >> /etc/rsyslog.conf
 	else
